@@ -1,6 +1,7 @@
 import streamlit as st
 import sys
 import os
+import json
 import folium
 import osmnx as ox
 from streamlit_folium import st_folium
@@ -9,6 +10,41 @@ import networkx as nx
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from engine import get_city_graph, inject_hazard, solve_safe_route, VEHICLE_PROFILES, AMBULANCE_PROFILES
 from database import verify_vehicle
+
+DETECTIONS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "detections.json")
+
+def poll_detections(G):
+    """
+    Reads detections.json, injects any unprocessed hazards into the graph,
+    marks them as processed, and returns count of new hazards injected.
+    """
+    if not os.path.exists(DETECTIONS_FILE):
+        return 0
+    try:
+        with open(DETECTIONS_FILE) as f:
+            records = json.load(f)
+    except Exception:
+        return 0
+
+    injected = 0
+    for record in records:
+        if record.get("processed"):
+            continue
+        lat = record["lat"]
+        lon = record["lon"]
+        for det in record.get("detections", []):
+            success = inject_hazard(G, lat, lon, label=det["hazard"])
+            if success:
+                if (lat, lon) not in st.session_state.hazards:
+                    st.session_state.hazards.append((lat, lon))
+                injected += 1
+        record["processed"] = True  # mark done
+
+    if injected:
+        with open(DETECTIONS_FILE, "w") as f:
+            json.dump(records, f, indent=2)
+
+    return injected
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="SafeQ Global", layout="wide", page_icon="🛡️")
@@ -46,6 +82,20 @@ for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
+# Maps old database vehicle type names → new profile names
+# Needed because database.py still returns the old string keys
+VEHICLE_TYPE_MAP = {
+    "Ambulance (Emergency)": "Ambulance 🚑 (Responding/Empty)",
+    "Standard Car":          "Standard Car",
+    "School Bus":            "School Bus",
+    "Two-Wheeler":           "Two-Wheeler",
+    "Heavy Truck":           "Heavy Truck",
+}
+
+def resolve_vehicle_type(v_type):
+    """Safely maps any vehicle type string to a known VEHICLE_PROFILES key."""
+    return VEHICLE_TYPE_MAP.get(v_type, v_type)
+
 # ==========================================
 # 🔐 LOGIN GATE
 # ==========================================
@@ -54,7 +104,7 @@ if not st.session_state.logged_in:
     user_in = st.text_input("Registration Number", placeholder="e.g. KL-07-AW-1234")
     if st.button("Verify & Sign In"):
         if user_in:
-            v_type = verify_vehicle(user_in)
+            v_type = resolve_vehicle_type(verify_vehicle(user_in))
             st.session_state.user_data = {
                 "reg_id": user_in.upper(),
                 "type": v_type,
@@ -154,6 +204,15 @@ elif user['type'] == "Ambulance 🚑 (Responding/Empty)":
 
 if st.session_state.G is not None:
     G = st.session_state.G
+
+    # ── Auto-refresh every 5 seconds to pick up new detections ───────────
+    from streamlit_autorefresh import st_autorefresh
+    st_autorefresh(interval=5000, key="detector_poll")
+
+    # ── Poll detector.py output file for new hazards ──────────────────────
+    new_hazards = poll_detections(G)
+    if new_hazards:
+        st.toast(f"📡 {new_hazards} new hazard(s) detected by scanner — map updated!", icon="⚠️")
 
     m = folium.Map(location=[9.9816, 76.2999], zoom_start=13, tiles=None)
     folium.TileLayer('cartodbdark_matter', name="Dark Mode (Default)").add_to(m)
@@ -266,3 +325,21 @@ if st.session_state.G is not None:
 
 else:
     st.info("👈 Initialize the Digital Twin in the sidebar to start.")
+
+# ── Detection Log pulled from detector page ──────────────────────────────────
+if st.session_state.get('detection_log'):
+    st.divider()
+    st.subheader("📋 Live Detection Feed")
+    st.caption("Hazards reported by the Detector page appear here in real-time")
+    log = st.session_state.detection_log[::-1][:5]  # latest 5
+    for entry in log:
+        st.markdown(f"""
+            <div style="background-color:#1e2130; padding:12px; border-radius:8px;
+                        border-left:4px solid #ff4b4b; margin-bottom:8px; color:white;">
+                🕐 <b>{entry['time']}</b> &nbsp;|&nbsp;
+                ⚠️ {entry['hazard']} &nbsp;|&nbsp;
+                🎯 {entry['conf']:.0%} &nbsp;|&nbsp;
+                📍 ({entry['lat']:.4f}, {entry['lon']:.4f}) &nbsp;|&nbsp;
+                🚗 {entry['reporter']}
+            </div>
+        """, unsafe_allow_html=True)
