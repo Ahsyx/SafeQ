@@ -1,0 +1,169 @@
+[
+  {
+    "time": "2026-03-07 09:35:55",
+    "lat": 9.9816,
+    "lon": 76.2999,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      }
+    ],
+    "processed": true
+  },
+  {
+    "time": "2026-03-07 09:38:50",
+    "lat": 9.9816,
+    "lon": 76.2999,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      }
+    ],
+    "processed": true
+  },
+  {
+    "time": "2026-03-07 09:45:29",
+    "lat": 9.9816,
+    "lon": 76.2999,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      }
+    ],
+    "processed": true
+  },
+  {
+    "time": "2026-03-07 09:48:34",
+    "lat": 9.9816,
+    "lon": 76.2999,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      }
+    ],
+    "processed": true
+  },
+  {
+    "time": "2026-03-07 09:52:00",
+    "lat": 9.9406,
+    "lon": 76.2653,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.071
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.05
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.037
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.029
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.021
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.015
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.012
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.012
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.011
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.01
+      },
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.01
+      }
+    ],
+    "processed": true
+  },
+  {
+    "time": "2026-03-07 09:52:09",
+    "lat": 9.9406,
+    "lon": 76.2653,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      }
+    ],
+    "processed": true
+  },
+  {
+    "time": "2026-03-07 09:53:21",
+    "lat": 9.9406,
+    "lon": 76.2653,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      }
+    ],
+    "processed": true
+  },
+  {
+    "time": "2026-03-07 10:09:16",
+    "lat": 9.953684,
+    "lon": 76.420864,
+    "reporter": "Anonymous",
+    "detections": [
+      {
+        "hazard": "Pothole Cluster",
+        "class": "pothole",
+        "confidence": 0.188
+      }
+    ],
+    "processed": true
+  }
+]
