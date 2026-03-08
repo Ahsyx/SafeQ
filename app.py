@@ -75,7 +75,7 @@ defaults = {
     'start': None,
     'end': None,
     'hazards': [],
-    # FIX: store the city name so geocoding uses the correct context
+    'original_path': None,   # stores naive shortest path before any hazard
     'city_query': "Kochi, Kerala, India"
 }
 for k, v in defaults.items():
@@ -97,21 +97,76 @@ def resolve_vehicle_type(v_type):
     return VEHICLE_TYPE_MAP.get(v_type, v_type)
 
 # ==========================================
-# 🔐 LOGIN GATE
+from auth import signup, login as auth_login
+
+# ==========================================
+# 🔐 LOGIN / SIGNUP GATE
 # ==========================================
 if not st.session_state.logged_in:
     st.title("🛡️ SafeQ: Autonomous Safety Dashboard")
-    user_in = st.text_input("Registration Number", placeholder="e.g. KL-07-AW-1234")
-    if st.button("Verify & Sign In"):
-        if user_in:
-            v_type = resolve_vehicle_type(verify_vehicle(user_in))
-            st.session_state.user_data = {
-                "reg_id": user_in.upper(),
-                "type": v_type,
-                "icon": VEHICLE_PROFILES[v_type]['icon']
-            }
-            st.session_state.logged_in = True
-            st.rerun()
+    st.caption("Smart road hazard detection & safe routing system")
+    st.divider()
+
+    tab_login, tab_signup = st.tabs(["🔑 Login", "📝 Sign Up"])
+
+    # ── LOGIN ────────────────────────────────────────────────────────────
+    with tab_login:
+        st.subheader("Welcome back")
+        username  = st.text_input("Username", key="login_user")
+        password  = st.text_input("Password", type="password", key="login_pass")
+
+        if st.button("Sign In", key="btn_login"):
+            if username and password:
+                ok, result = auth_login(username, password)
+                if ok:
+                    v_type = resolve_vehicle_type(result["vehicle_type"])
+                    st.session_state.user_data = {
+                        "reg_id": result["reg_number"],
+                        "type":   v_type,
+                        "icon":   VEHICLE_PROFILES[v_type]['icon'],
+                        "name":   result.get("name", username)
+                    }
+                    st.session_state.logged_in = True
+                    st.rerun()
+                else:
+                    st.error(f"❌ {result}")
+            else:
+                st.warning("Please enter username and password.")
+
+        st.divider()
+        st.caption("Demo accounts — Registration Number: `KL-07-AW-1234` (Ambulance), `KL-40-Q-9999` (Two-Wheeler)")
+
+    # ── SIGNUP ───────────────────────────────────────────────────────────
+    with tab_signup:
+        st.subheader("Create your account")
+
+        new_username = st.text_input("Username",           key="su_user", placeholder="e.g. ashik")
+        new_password = st.text_input("Password",           key="su_pass", type="password", placeholder="Min 6 characters")
+        new_reg      = st.text_input("Vehicle Reg Number", key="su_reg",  placeholder="e.g. KL-07-AW-1234")
+
+        # Auto-detect vehicle type from VAHAN database as user types
+        detected_vtype = None
+        if new_reg:
+            detected_vtype = resolve_vehicle_type(verify_vehicle(new_reg))
+            if detected_vtype and detected_vtype != "Standard Car":
+                st.success(f"✅ VAHAN Database: **{detected_vtype}** detected for `{new_reg.upper()}`")
+            else:
+                st.info(f"🚗 VAHAN Database: Registered as **Standard Car** (or unrecognised plate)")
+
+        if st.button("Create Account", key="btn_signup"):
+            if new_username and new_password and new_reg:
+                final_vtype = detected_vtype or "Standard Car"
+                ok, msg = signup(new_username, new_password, new_reg, final_vtype)
+                if ok:
+                    st.success(f"✅ {msg} Registered as **{final_vtype}**. Please log in.")
+                else:
+                    st.error(f"❌ {msg}")
+            else:
+                st.warning("Please fill all fields.")
+
+        st.divider()
+        st.caption("🔍 Try: `KL-07-AW-1234` (Ambulance) · `KL-40-Q-9999` (Two-Wheeler) · `KL-01-BT-5555` (School Bus)")
+
     st.stop()
 
 # ==========================================
@@ -125,8 +180,8 @@ safety_val = 0.0
 with st.sidebar:
     st.title("🛡️ SafeQ Control")
     user = st.session_state.user_data
-    st.success(f"ID: {user['reg_id']}")
-    st.info(f"Priority: {user['icon']} {user['type']}")
+    st.success(f"👤 {user.get('name', user['reg_id'])}")
+    st.info(f"🚗 {user['reg_id']} | {user['icon']} {user['type']}")
 
     # --- AMBULANCE MODE SWITCHER ---
     if user['type'] in AMBULANCE_PROFILES:
@@ -149,6 +204,19 @@ with st.sidebar:
         for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
+
+    # Reset hazards button
+    if st.session_state.get('hazards'):
+        st.divider()
+        if st.button("🔄 Clear All Hazards & Recalculate"):
+            # Clear hazards from session
+            st.session_state.hazards = []
+            # Reset all edge risks in graph
+            G_reset = st.session_state.get('G')
+            if G_reset:
+                for u, v, k, d in G_reset.edges(keys=True, data=True):
+                    d['risk'] = 0.0
+            st.rerun()
 
     st.divider()
 
@@ -175,14 +243,20 @@ with st.sidebar:
     end_addr   = st.text_input("Destination", "Kakanad")
 
     if st.button("🚀 Calculate Route"):
-        # FIX: use stored city_query instead of hardcoded Kochi string
         context = f", {st.session_state.city_query}"
         try:
-            st.session_state.start = ox.geocode(start_addr + context)
-            st.session_state.end   = ox.geocode(end_addr   + context)
+            st.session_state.start         = ox.geocode(start_addr + context)
+            st.session_state.end           = ox.geocode(end_addr   + context)
+            st.session_state.original_path = None  # reset so red line recaptures clean path
             st.rerun()
         except Exception as e:
             st.error(f"Address Error: {e}")
+
+    if st.session_state.get('start') or st.session_state.get('end'):
+        if st.button("🔄 Reset Route"):
+            st.session_state.start = None
+            st.session_state.end   = None
+            st.rerun()
 
 # --- MAIN DISPLAY ---
 st.title(f"SafeQ Engine | {user['icon']} Mode")
@@ -225,21 +299,33 @@ if st.session_state.G is not None:
 
     if st.session_state.start and st.session_state.end:
         try:
+            # Standard route (red dashed) — frozen on first calc, never changes after hazards
             orig_n = ox.nearest_nodes(G, st.session_state.start[1], st.session_state.start[0])
             dest_n = ox.nearest_nodes(G, st.session_state.end[1],   st.session_state.end[0])
 
-            # Standard route (red dashed)
-            path_std   = nx.shortest_path(G, orig_n, dest_n, weight='length')
+            if not st.session_state.original_path:
+                st.session_state.original_path = nx.shortest_path(G, orig_n, dest_n, weight='length')
+            path_std   = st.session_state.original_path
             std_coords = [[G.nodes[n]['y'], G.nodes[n]['x']] for n in path_std]
-            folium.PolyLine(std_coords, color="#FF4B4B", weight=3,
-                            opacity=0.4, dash_array='5').add_to(m)
 
-            # SafeQ route (green)
+            # SafeQ route (green) — recalculates with hazard weights every time
             path_safe, s_node, e_node = solve_safe_route(
                 G, st.session_state.start, st.session_state.end, profile=user['type']
             )
             safe_coords = [[G.nodes[n]['y'], G.nodes[n]['x']] for n in path_safe]
-            folium.PolyLine(safe_coords, color="#00ff88", weight=6).add_to(m)
+
+            routes_differ = path_safe != path_std
+
+            # Red = original naive route (always shown for comparison)
+            folium.PolyLine(std_coords, color="#FF4B4B",
+                            weight=5 if routes_differ else 3,
+                            opacity=0.85 if routes_differ else 0.4,
+                            dash_array='10',
+                            tooltip="⚠️ Original Shortest Route (ignores hazards)").add_to(m)
+
+            # Green = SafeQ safe route
+            folium.PolyLine(safe_coords, color="#00ff88", weight=7,
+                            tooltip="✅ SafeQ Safe Route").add_to(m)
 
             # Tethering lines
             folium.PolyLine(
@@ -255,13 +341,29 @@ if st.session_state.G is not None:
             folium.Marker(st.session_state.end,   icon=folium.Icon(color='red')).add_to(m)
 
             # Metrics
+            route_max_risk = 0
             for u, v in zip(path_safe[:-1], path_safe[1:]):
-                edge_data  = G.get_edge_data(u, v)[0]
+                edge_data   = G.get_edge_data(u, v)[0]
                 dist_total += edge_data.get('length', 0)
                 risk_score += edge_data.get('risk', 0)
+                route_max_risk = max(route_max_risk, edge_data.get('risk', 0))
 
-            sensitivity = VEHICLE_PROFILES[user['type']]['sensitivity']
-            safety_val  = max(0, 100 - (risk_score * sensitivity * 0.5))
+            # FIX: safety index — 100% when no risk, drops proportionally
+            # risk_score is raw sum of hazard severities on path
+            # normalize against max possible (95 = Major Accident severity)
+            total_edges  = max(len(path_safe) - 1, 1)
+            avg_risk     = risk_score / total_edges
+            sensitivity  = VEHICLE_PROFILES[user['type']]['sensitivity']
+            safety_val   = max(0.0, 100.0 - min(avg_risk * sensitivity, 100.0))
+
+            # Route status banners
+            if routes_differ:
+                st.success("✅ **SafeQ rerouted** — green line avoids the hazard. Red = original shortest path.")
+            elif route_max_risk > 0:
+                st.warning(
+                    f"⚠️ **No bypass available** — safest path still passes hazard zone "
+                    f"(risk={route_max_risk:.0f}). Road network has no alternative here."
+                )
 
         except Exception as e:
             st.warning(f"Optimization Notice: {e}")
